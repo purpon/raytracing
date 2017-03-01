@@ -1,10 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "math-toolkit.h"
 #include "primitives.h"
 #include "raytracing.h"
 #include "idx_stack.h"
+#include "main.h"
 
 #define MAX_REFLECTION_BOUNCES	3
 #define MAX_DISTANCE 1000000000000.0
@@ -453,31 +458,43 @@ static unsigned int ray_color(const point3 e, double t,
 }
 
 /* @param background_color this is not ambient light */
-void raytracing(uint8_t *pixels, color background_color,
-                rectangular_node rectangulars, sphere_node spheres,
-                light_node lights, const viewpoint *view,
-                int width, int height)
+void *raytracing(void *wrappedData)
 {
+    struct wrapped *wrap=(struct wrapped*)wrappedData;
+    uint8_t *pixels = (uint8_t*) wrap->pix;
+    color background_color;
+    memcpy(background_color,wrap->bac,sizeof(color));
+    rectangular_node rectangulars = (rectangular_node) wrap->rec;
+    sphere_node spheres = (sphere_node) wrap->sph;
+    light_node lights = (light_node) wrap->lig;
+    const viewpoint *view = (const viewpoint*) wrap->vie;
+    int maxWidth = (int) wrap->maxWid;
+    int maxHeight = (int) wrap->maxHei;
+    pthread_t threadid=pthread_self();
     point3 u, v, w, d;
-    color object_color = { 0.0, 0.0, 0.0 };
 
     /* calculate u, v, w */
     calculateBasisVectors(u, v, w, view);
-
-    idx_stack stk;
-
     int factor = sqrt(SAMPLES);
-    for (int j = 0; j < height; j++) {
-        for (int i = 0; i < width; i++) {
+    idx_stack stk;
+    unsigned long indexHeight;
+    printf("Thread id= %lu.\n",threadid);
+    while(1) {
+        color object_color = { 0.0, 0.0, 0.0 };
+        GetPixelIndex(&indexHeight);
+        if(indexHeight > maxHeight)
+            break;
+        printf("Thread id= %lu :Index of Height: %ld \n",threadid,indexHeight);
+        for(int iWidth=0; iWidth < maxWidth; iWidth++) {
             double r = 0, g = 0, b = 0;
             /* MSAA */
             for (int s = 0; s < SAMPLES; s++) {
                 idx_stack_init(&stk);
                 rayConstruction(d, u, v, w,
-                                i * factor + s / factor,
-                                j * factor + s % factor,
+                                iWidth * factor + s / factor,
+                                indexHeight * factor + s % factor,
                                 view,
-                                width * factor, height * factor);
+                                maxWidth * factor, maxHeight * factor);
                 if (ray_color(view->vrp, 0.0, d, &stk, rectangulars, spheres,
                               lights, object_color,
                               MAX_REFLECTION_BOUNCES)) {
@@ -489,10 +506,11 @@ void raytracing(uint8_t *pixels, color background_color,
                     g += background_color[1];
                     b += background_color[2];
                 }
-                pixels[((i + (j * width)) * 3) + 0] = r * 255 / SAMPLES;
-                pixels[((i + (j * width)) * 3) + 1] = g * 255 / SAMPLES;
-                pixels[((i + (j * width)) * 3) + 2] = b * 255 / SAMPLES;
+                pixels[((iWidth+indexHeight*maxWidth) * 3) + 0] = r * 255 / SAMPLES;
+                pixels[((iWidth+indexHeight*maxWidth) * 3) + 1] = g * 255 / SAMPLES;
+                pixels[((iWidth+indexHeight*maxWidth) * 3) + 2] = b * 255 / SAMPLES;
             }
         }
     }
+    return (void *)0;
 }
