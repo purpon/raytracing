@@ -470,7 +470,6 @@ void *raytracing(void *wrappedData)
     const viewpoint *view = (const viewpoint*) wrap->vie;
     int maxWidth = (int) wrap->maxWid;
     int maxHeight = (int) wrap->maxHei;
-    pthread_t threadid=pthread_self();
     point3 u, v, w, d;
 
     /* calculate u, v, w */
@@ -478,13 +477,11 @@ void *raytracing(void *wrappedData)
     int factor = sqrt(SAMPLES);
     idx_stack stk;
     unsigned long indexHeight;
-    printf("Thread id= %lu.\n",threadid);
     while(1) {
         color object_color = { 0.0, 0.0, 0.0 };
         GetPixelIndex(&indexHeight);
         if(indexHeight > maxHeight)
             break;
-        printf("Thread id= %lu :Index of Height: %ld \n",threadid,indexHeight);
         for(int iWidth=0; iWidth < maxWidth; iWidth++) {
             double r = 0, g = 0, b = 0;
             /* MSAA */
